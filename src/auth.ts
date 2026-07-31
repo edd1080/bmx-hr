@@ -13,11 +13,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Contraseña", type: "password" },
       },
       authorize: async (credentials) => {
-        const username = credentials?.username as string | undefined;
+        const input = (credentials?.username as string | undefined)?.trim();
         const password = credentials?.password as string | undefined;
-        if (!username || !password) return null;
+        if (!input || !password) return null;
 
-        const user = await prisma.user.findUnique({ where: { username } });
+        const user = await prisma.user.findFirst({
+          where: {
+            OR: [{ username: input }, { email: input }, { employeeCode: input }],
+          },
+        });
         if (!user) return null;
 
         // Los colaboradores dados de baja no pueden ingresar.

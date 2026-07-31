@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isManager as checkIsManager } from "@/lib/leave-server";
@@ -22,10 +23,13 @@ function timeAgo(date: Date): string {
 
 export default async function DashboardPage() {
   const session = await auth();
-  const userId = session!.user.id;
-  const isHR = session!.user.isHR;
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+  const userId = session.user.id;
+  const isHR = session.user.isHR ?? false;
   const isManager = await checkIsManager(userId);
-  const firstName = session!.user.name!.split(" ")[0];
+  const firstName = (session.user.name ?? "Colaborador").split(" ")[0];
 
   const now = new Date();
   const month = now.getMonth() + 1;

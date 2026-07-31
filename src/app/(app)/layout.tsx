@@ -13,8 +13,11 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  const userId = session!.user.id;
-  const isHR = session!.user.isHR;
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+  const userId = session.user.id;
+  const isHR = session.user.isHR ?? false;
   const isManager = await checkIsManager(userId);
   // Gerente N1 del módulo Onboarding: es titular (gerente) de alguna Dirección.
   const n1Direccion = isHR

@@ -105,7 +105,7 @@
   --tint-gray-fg: #9aa7c4;
 }
 
-@theme inline {
+@theme {
   --color-brand-primary: var(--brand-primary);
   --color-brand-primary-dark: var(--brand-primary-dark);
   --color-brand-navy: var(--brand-navy);

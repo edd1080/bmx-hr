@@ -33,10 +33,14 @@ function LoginForm() {
         return;
       }
 
-      router.push(callbackUrl);
-      router.refresh();
-    } catch {
-      setError("Ocurrió un error al iniciar sesión. Inténtalo de nuevo.");
+      window.location.href = callbackUrl || "/dashboard";
+    } catch (err: unknown) {
+      const errorObj = err as { type?: string; message?: string };
+      if (errorObj?.type === "CredentialsSignin" || errorObj?.message?.includes("CredentialsSignin")) {
+        setError("Usuario o contraseña incorrectos.");
+      } else {
+        window.location.href = callbackUrl || "/dashboard";
+      }
     } finally {
       setLoading(false);
     }
