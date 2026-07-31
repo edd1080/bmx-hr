@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -17,6 +18,22 @@ const PROTECTED_PREFIXES = [
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
+
+  // Rate Limiting por IP (10 peticiones de login por minuto; 120 peticiones generales por minuto)
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "127.0.0.1";
+  
+  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+    const rl = checkRateLimit(`login_${ip}`, 10, 60000);
+    if (!rl.success) {
+      return rateLimitResponse(rl.reset);
+    }
+  } else {
+    const rl = checkRateLimit(`general_${ip}`, 120, 60000);
+    if (!rl.success) {
+      return rateLimitResponse(rl.reset);
+    }
+  }
+
   const isLoggedIn = !!req.auth?.user;
   const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
