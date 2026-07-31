@@ -1,0 +1,595 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// status: "PENDING" | "APPROVED" | "REJECTED"
+// type: "VACATION" | "EARLY_FRIDAY" | "HALF_DAY"
+// category: "ADMINISTRATIVO" | "OPERATIVO" — EARLY_FRIDAY is only available to ADMINISTRATIVO.
+// Kept as String (not Prisma enum) so the schema works unchanged on SQLite (dev) and Postgres (prod).
+
+model User {
+  id                   String   @id @default(cuid())
+  employeeCode         String?  @unique
+  curp                 String?
+  name                 String
+  email                String?  @unique
+  username             String   @unique
+  passwordHash         String
+  mustChangePassword   Boolean  @default(true)
+  isHR                 Boolean  @default(false)
+  area                 String?
+  departamento         String?
+  puesto               String?
+  telefono             String?
+  category             String   @default("ADMINISTRATIVO")
+  vacationDaysAssigned Int      @default(0)
+  hireDate             DateTime?
+  birthDate            DateTime?
+  empresa              String?
+  activo               Boolean  @default(true)
+  bajaAt               DateTime?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  managerId String?
+  manager   User?   @relation("ManagerReports", fields: [managerId], references: [id])
+  reports   User[]  @relation("ManagerReports")
+
+  leaveRequests  LeaveRequest[] @relation("RequesterRequests")
+  decisions      LeaveRequest[] @relation("ManagerDecisions")
+  notifications  Notification[]
+  metas          Meta[]         @relation("MetaOwner")
+  metaDecisions  Meta[]         @relation("MetaDecisions")
+  posts          Post[]         @relation("PostAuthor")
+  courses        Course[]       @relation("CourseAuthor")
+  enrollments    Enrollment[]   @relation("EnrollmentUser")
+  examAttempts   ExamAttempt[]  @relation("AttemptUser")
+  tickets        Ticket[]        @relation("TicketCreator")
+  ticketComments TicketComment[] @relation("CommentAuthor")
+  beneficios     Beneficio[]     @relation("BeneficioAuthor")
+  direccionesN1  Direccion[]     @relation("DireccionGerente")
+  planSesiones   PlanSesion[]    @relation("PlanSesionResponsable")
+  documentos     Documento[]     @relation("DocumentoAuthor")
+  firmas         Firma[]         @relation("FirmaUser")
+  documentosDest DocumentoDestinatario[] @relation("DestinatarioUser")
+  pushSubs       PushSubscription[] @relation("PushSubUser")
+  eventos        Evento[]        @relation("EventoAuthor")
+  eventoRsvps    EventoRSVP[]    @relation("RSVPUser")
+  encuestas      Encuesta[]      @relation("EncuestaAuthor")
+  encuestaVotos  EncuestaVoto[]  @relation("VotoUser")
+  reconoceDados      Reconocimiento[] @relation("ReconoceDe")
+  reconoceRecibidos  Reconocimiento[] @relation("ReconocePara")
+}
+
+model LeaveRequest {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation("RequesterRequests", fields: [userId], references: [id])
+  type           String
+  startDate      DateTime
+  endDate        DateTime
+  days           Float
+  reason         String?
+  status         String    @default("PENDING")
+  managerId      String?
+  manager        User?     @relation("ManagerDecisions", fields: [managerId], references: [id])
+  managerComment String?
+  decidedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  folio          String?   @unique
+  pdfGeneratedAt DateTime?
+}
+
+model Notification {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  message          String
+  relatedRequestId String?
+  read             Boolean  @default(false)
+  createdAt        DateTime @default(now())
+}
+
+// tipo: "ORGANICA" | "NOMINAL" | "PROYECTO"
+// categoria: "MAXIMIZAR" | "TRANSFORMAR" | "INTEGRAR" | "DISRUPCION" | "ATLAS"
+// naturaleza: "CRECE" | "DECRECE"
+// estado: "BORRADOR" | "EN_REVISION" | "APROBADA" — un rechazo regresa la meta a "BORRADOR"
+// con managerComment visible, no existe un estado "RECHAZADA" aparte.
+// valorAnterior/valor se guardan como texto libre porque el formato real de la empresa
+// mezcla números, porcentajes y unidades (ej. "85%", "1200 ton").
+model Meta {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation("MetaOwner", fields: [userId], references: [id])
+  ciclo          Int
+  tipo           String
+  categoria      String
+  nombre         String
+  descripcion    String
+  peso           Int
+  naturaleza     String
+  memoriaCalculo String
+  valorAnterior  String?
+  valor          String
+  unidad         String
+  alcanceParcial Boolean   @default(false)
+  fuente         String
+  fechaInicio    DateTime
+  fechaFin       DateTime
+  estado         String    @default("BORRADOR")
+  managerId      String?
+  manager        User?     @relation("MetaDecisions", fields: [managerId], references: [id])
+  managerComment String?
+  lockedAt       DateTime?
+  decidedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  avances MetaAvance[]
+}
+
+// Seguimiento mensual de una meta ya Aprobada — el propio colaborador reporta
+// su avance (0-100%) cada mes; el jefe directo y Gente y Gestión solo lo consultan,
+// no lo editan. Un registro por meta y mes (se actualiza si ya existía).
+model MetaAvance {
+  id         String   @id @default(cuid())
+  metaId     String
+  meta       Meta     @relation(fields: [metaId], references: [id])
+  mes        Int
+  avancePct  Int
+  comentario String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([metaId, mes])
+}
+
+// Módulo Comunicación — feed tipo red social publicado por Gente y Gestión.
+// tipo: "COMUNICADO" | "NOTICIA"
+// imageData guarda la imagen como data URL (base64) ya comprimida en el cliente;
+// se mantiene todo dentro de dev.db para no depender del sistema de archivos ni
+// saturar la carpeta sincronizada en OneDrive.
+model Post {
+  id        String   @id @default(cuid())
+  authorId  String
+  author    User     @relation("PostAuthor", fields: [authorId], references: [id])
+  tipo      String   @default("COMUNICADO")
+  titulo    String
+  cuerpo    String
+  imageData String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Módulo Capacitación — mini plataforma de e-learning.
+// Un Curso agrupa varias Lecciones; cada lección es un video embebido (YouTube,
+// Vimeo, Drive o URL directa) o una liga a un formulario / recurso externo.
+model Course {
+  id          String   @id @default(cuid())
+  authorId    String
+  author      User     @relation("CourseAuthor", fields: [authorId], references: [id])
+  titulo      String
+  descripcion String
+  categoria   String?
+  coverData   String?
+  // modalidad: "VIRTUAL" | "PRESENCIAL". Los campos sede/instructor/fechaEvento/cupo
+  // solo aplican a cursos presenciales; horas se usa además para el futuro DC-3.
+  modalidad   String    @default("VIRTUAL")
+  sede        String?
+  instructor  String?
+  horas       Float?
+  fechaEvento DateTime?
+  cupo        Int?
+  // Porcentaje mínimo para aprobar el examen del curso (0-100).
+  puntajeAprobacion Int @default(80)
+  // Vigencia de la constancia en meses (null = no vence). Para seguimiento de vencimientos.
+  vigenciaMeses Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lessons     Lesson[]
+  enrollments Enrollment[]
+  questions   Question[]
+  attempts    ExamAttempt[]
+  rutaCursos  RutaCurso[]
+}
+
+// Ruta de aprendizaje asociada a un puesto: conjunto ordenado de cursos que
+// deben tomar los colaboradores de ese puesto. El puesto se compara (case-insensitive)
+// contra User.puesto.
+model Ruta {
+  id          String      @id @default(cuid())
+  nombre      String
+  puesto      String
+  descripcion String?
+  createdAt   DateTime    @default(now())
+  cursos      RutaCurso[]
+}
+
+model RutaCurso {
+  id       String @id @default(cuid())
+  rutaId   String
+  ruta     Ruta   @relation(fields: [rutaId], references: [id], onDelete: Cascade)
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  orden    Int    @default(0)
+
+  @@unique([rutaId, courseId])
+}
+
+// Módulo Mesa de Ayuda — tickets que el colaborador levanta hacia un área.
+// area: "RH" | "CAPACITACION" | "SISTEMAS" | "MANTENIMIENTO" | "COMPRAS" | "ADMINISTRACION"
+// prioridad: "BAJA" | "MEDIA" | "ALTA"
+// estado: "ABIERTO" | "EN_PROCESO" | "RESUELTO" | "CERRADO"
+model Ticket {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("TicketCreator", fields: [userId], references: [id])
+  area        String
+  asunto      String
+  descripcion String
+  prioridad   String   @default("MEDIA")
+  estado      String   @default("ABIERTO")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  closedAt    DateTime?
+
+  comentarios TicketComment[]
+}
+
+// Seguimiento del ticket: comentarios del colaborador y de Gente y Gestión.
+model TicketComment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("CommentAuthor", fields: [userId], references: [id])
+  mensaje   String
+  createdAt DateTime @default(now())
+}
+
+// Módulo Beneficios — catálogo publicado por Gente y Gestión, visible para todos.
+// tipo: "BENEFICIO" | "CONVENIO" | "PROGRAMA" | "DESCUENTO" | "CAMPANA"
+model Beneficio {
+  id          String   @id @default(cuid())
+  authorId    String
+  author      User     @relation("BeneficioAuthor", fields: [authorId], references: [id])
+  tipo        String   @default("BENEFICIO")
+  titulo      String
+  descripcion String
+  imageData   String?
+  enlace      String?
+  vigencia    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Pregunta de opción múltiple del examen de un curso.
+// opciones: JSON con el arreglo de textos; correcta: índice (0-based) de la opción correcta.
+model Question {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  texto     String
+  opciones  String
+  correcta  Int
+  orden     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// Intento de examen de un colaborador. score 0-100; aprobado según puntajeAprobacion del curso.
+model ExamAttempt {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("AttemptUser", fields: [userId], references: [id])
+  score     Int
+  aprobado  Boolean
+  createdAt DateTime @default(now())
+}
+
+// Inscripción de un colaborador a un curso.
+// estado: "INSCRITO" | "COMPLETADO" | "CANCELADO"
+model Enrollment {
+  id          String    @id @default(cuid())
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation("EnrollmentUser", fields: [userId], references: [id])
+  estado      String    @default("INSCRITO")
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@unique([courseId, userId])
+}
+
+// tipo: "VIDEO" | "FORM" | "LINK"
+model Lesson {
+  id          String   @id @default(cuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  tipo        String   @default("VIDEO")
+  titulo      String
+  url         String
+  descripcion String?
+  orden       Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+// Bitácora de cada importación de padrón desde Excel. Sirve de auditoría:
+// quién importó, cuándo, con qué archivo y qué se aplicó.
+model ImportRun {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  actorId        String?  // usuario (G&G) que ejecutó la importación
+  actorName      String?
+  fileName       String?
+  created        Int      @default(0)
+  updated        Int      @default(0)
+  unchanged      Int      @default(0)
+  errors         Int      @default(0)
+  deactivated    Int      @default(0)
+  backupFile     String?  // nombre del respaldo generado antes de aplicar
+  deactivateMode Boolean  @default(false) // si se activó "padrón completo"
+}
+
+// ===================== MÓDULO ONBOARDING POR POSICIÓN =====================
+
+// Dirección / Área de la empresa. Un Gerente N1 la administra.
+model Direccion {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  color       String   @default("#1C3565")
+  gerenteN1Id String?
+  gerenteN1   User?    @relation("DireccionGerente", fields: [gerenteN1Id], references: [id])
+  posiciones  Posicion[]
+  createdAt   DateTime @default(now())
+}
+
+// Posición (puesto) como entidad. El "titular actual" se resuelve por nombre de
+// puesto + área contra la tabla User (no se liga por FK para no migrar a 327 users).
+model Posicion {
+  id            String    @id @default(cuid())
+  nombre        String
+  areaId        String
+  area          Direccion @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  departamento  String?
+  subDepartamento String?
+  nivelLabel    String?   // etiqueta de nivel del dataset (ej. "Operativo Comercial")
+  headcount     Int       @default(0) // nº de personas en el puesto (del organigrama)
+  titularNombre String?   // titular actual (denormalizado del organigrama; los User aún no traen puesto)
+  nivel         Int       @default(0)
+  reportaAId    String?
+  reportaA      Posicion? @relation("PosicionReporta", fields: [reportaAId], references: [id])
+  reportes      Posicion[] @relation("PosicionReporta")
+  config        OnboardingConfig?
+  // Sesiones donde ESTA posición es la responsable (aparece en el onboarding de otras).
+  comoResponsable OnboardingSession[] @relation("SesionResponsable")
+  planSesiones    PlanSesion[]        @relation("PlanSesionPosicion")
+  nuevosIngresos  NuevoIngreso[]
+  createdAt     DateTime  @default(now())
+
+  @@unique([nombre, areaId])
+}
+
+// estado: "none" | "partial" | "complete"
+model OnboardingConfig {
+  id             String    @id @default(cuid())
+  posicionId     String    @unique
+  posicion       Posicion  @relation(fields: [posicionId], references: [id], onDelete: Cascade)
+  estado         String    @default("none")
+  actualizadoPor String?
+  actualizadoAt  DateTime  @updatedAt
+  sesiones       OnboardingSession[]
+}
+
+// tipo: "obligatoria" | "recomendada"
+// evidencia: "firma" | "checklist" | "evaluacion" | "ninguna"
+model OnboardingSession {
+  id                   String   @id @default(cuid())
+  configId             String
+  config               OnboardingConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  posicionResponsableId String
+  posicionResponsable  Posicion @relation("SesionResponsable", fields: [posicionResponsableId], references: [id], onDelete: Cascade)
+  objetivo             String?
+  duracionMin          Int      @default(30)
+  orden                Int      @default(0)
+  tipo                 String   @default("obligatoria")
+  material             String?
+  evidencia            String   @default("ninguna")
+
+  @@unique([configId, posicionResponsableId])
+}
+
+// Nuevo ingreso: al crearse materializa un PlanSesion por cada OnboardingSession.
+model NuevoIngreso {
+  id               String   @id @default(cuid())
+  colaboradorNombre String
+  posicionId       String
+  posicion         Posicion @relation(fields: [posicionId], references: [id])
+  fechaIngreso     DateTime
+  creadoPor        String?
+  createdAt        DateTime @default(now())
+  sesiones         PlanSesion[]
+}
+
+// estado: "pendiente" | "agendada" | "realizada"
+model PlanSesion {
+  id                     String   @id @default(cuid())
+  planId                 String
+  plan                   NuevoIngreso @relation(fields: [planId], references: [id], onDelete: Cascade)
+  posicionResponsableId  String
+  posicionResponsable    Posicion @relation("PlanSesionPosicion", fields: [posicionResponsableId], references: [id])
+  responsableId          String?  // titular resuelto al generar el plan
+  responsable            User?    @relation("PlanSesionResponsable", fields: [responsableId], references: [id])
+  estado                 String   @default("pendiente")
+  fecha                  DateTime?
+  hora                   String?
+  comentarios            String?
+  evidenciaUrl           String?
+  tipo                   String   @default("obligatoria")
+  objetivo               String?
+  duracionMin            Int      @default(30)
+  orden                  Int      @default(0)
+}
+
+// ===================== MÓDULO FIRMA ELECTRÓNICA =====================
+// Acuse auditable dentro de la app (quién / cuándo / qué documento), NO firma
+// certificada PSC / e.firma. G&G publica un documento y los colaboradores
+// destinatarios lo firman (teclean su nombre + aceptan); se guarda un hash del
+// contenido para dejar constancia de lo que se firmó.
+// tipo: "POLITICA" | "COMUNICADO" | "ACUSE" | "DOCUMENTO" | "CONSTANCIA"
+// alcance: "TODOS" | "AREA" | "SELECCION"
+model Documento {
+  id            String   @id @default(cuid())
+  authorId      String
+  author        User     @relation("DocumentoAuthor", fields: [authorId], references: [id])
+  tipo          String   @default("POLITICA")
+  titulo        String
+  cuerpo        String
+  archivoData   String?  // PDF/imagen opcional como data URL (se guarda en la BD)
+  archivoNombre String?
+  alcance       String   @default("TODOS")
+  area          String?  // cuando alcance = AREA
+  vigencia      String?
+  cerrado       Boolean  @default(false) // ya no admite nuevas firmas
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  firmas        Firma[]
+  destinatarios DocumentoDestinatario[]
+}
+
+// Destinatario explícito cuando el documento tiene alcance = SELECCION.
+model DocumentoDestinatario {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation("DestinatarioUser", fields: [userId], references: [id])
+
+  @@unique([documentoId, userId])
+}
+
+// Acuse / firma de un colaborador sobre un documento.
+model Firma {
+  id          String    @id @default(cuid())
+  documentoId String
+  documento   Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation("FirmaUser", fields: [userId], references: [id])
+  nombreFirma String    // nombre tecleado por el colaborador como firma
+  hashDoc     String    // hash del contenido firmado (auditoría)
+  ipHint      String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([documentoId, userId])
+}
+
+// Suscripción Web Push de un navegador/dispositivo del colaborador (PWA).
+// endpoint es único por suscripción; p256dh/auth son las llaves de cifrado del
+// navegador. Se envía un push cada vez que se crea una notificación interna.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("PushSubUser", fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+}
+
+// ===================== COMUNICACIÓN — EVENTOS / ENCUESTAS / RECONOCIMIENTOS =====================
+
+// Evento interno (junta, capacitación, festejo). G&G lo publica y los
+// colaboradores confirman asistencia. Se muestra en el feed de Comunicación.
+model Evento {
+  id          String   @id @default(cuid())
+  authorId    String
+  author      User     @relation("EventoAuthor", fields: [authorId], references: [id])
+  titulo      String
+  descripcion String
+  imageData   String?
+  lugar       String?
+  inicio      DateTime
+  fin         DateTime?
+  createdAt   DateTime @default(now())
+
+  rsvps       EventoRSVP[]
+}
+
+// Confirmación de asistencia. estado: "SI" | "TALVEZ" | "NO"
+model EventoRSVP {
+  id       String @id @default(cuid())
+  eventoId String
+  evento   Evento @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation("RSVPUser", fields: [userId], references: [id], onDelete: Cascade)
+  estado   String
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventoId, userId])
+}
+
+// Encuesta / sondeo. G&G la publica con varias opciones; cada colaborador vota una.
+model Encuesta {
+  id        String   @id @default(cuid())
+  authorId  String
+  author    User     @relation("EncuestaAuthor", fields: [authorId], references: [id])
+  pregunta  String
+  cerrada   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  opciones  EncuestaOpcion[]
+  votos     EncuestaVoto[]
+}
+
+model EncuestaOpcion {
+  id         String   @id @default(cuid())
+  encuestaId String
+  encuesta   Encuesta @relation(fields: [encuestaId], references: [id], onDelete: Cascade)
+  texto      String
+  orden      Int      @default(0)
+
+  votos      EncuestaVoto[]
+}
+
+model EncuestaVoto {
+  id         String         @id @default(cuid())
+  encuestaId String
+  encuesta   Encuesta       @relation(fields: [encuestaId], references: [id], onDelete: Cascade)
+  opcionId   String
+  opcion     EncuestaOpcion @relation(fields: [opcionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User           @relation("VotoUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+
+  @@unique([encuestaId, userId])
+}
+
+// Reconocimiento entre colaboradores (kudos). Cualquier colaborador reconoce a otro.
+// categoria: "GRACIAS" | "EQUIPO" | "EXTRA_MILE" | "INNOVACION" | "VALORES"
+model Reconocimiento {
+  id        String   @id @default(cuid())
+  deId      String
+  de        User     @relation("ReconoceDe", fields: [deId], references: [id], onDelete: Cascade)
+  paraId    String
+  para      User     @relation("ReconocePara", fields: [paraId], references: [id], onDelete: Cascade)
+  categoria String   @default("GRACIAS")
+  mensaje   String
+  createdAt DateTime @default(now())
+}

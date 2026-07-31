@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+
+  /* Brand */
+  --brand-primary: #1c3565;
+  --brand-primary-dark: #16274b;
+  /* Azul de marca fijo (para rellenos/logos): NO cambia en modo oscuro,
+     a diferencia de --brand-primary que además hace de color de texto. */
+  --brand-navy: #1c3565;
+  --brand-accent: #4a88fa;
+  --brand-accent-light: #6fa0fb;
+  --brand-accent-lighter: #8fb0f5;
+  --brand-gray: #cbcbcb;
+
+  /* Surfaces */
+  --page: #f4f6fa;
+  --surface: #ffffff;
+  --border: #e7eaf1;
+  --border-input: #dce2ec;
+  --divider: #eef1f6;
+
+  /* Text */
+  --text-secondary: #42506e;
+  --text-muted: #6b7690;
+  --text-muted-2: #8a94a9;
+  --text-muted-3: #9aa5bb;
+
+  /* Semantic status */
+  --success: #1f8a5b;
+  --success-bg: #e6f3ec;
+  --warning: #b4740e;
+  --warning-bg: #fbf0dd;
+  --danger: #c0392b;
+  --danger-bg: #f8e9e7;
+  --teal: #1f7a7a;
+  --teal-bg: #e4f1f1;
+
+  /* Leave type chips */
+  --vacation-bg: #e8eefb;
+  --vacation-text: #2a5cc7;
+  --earlyfriday-bg: #e7ebf2;
+  --earlyfriday-text: #1c3565;
+  --halfday-bg: #e4f1f1;
+  --halfday-text: #1f7a7a;
+
+  /* Tintes de acento (chips, íconos, avatares). Se adaptan en modo oscuro. */
+  --tint-purple-bg: #ede7f6;
+  --tint-purple-fg: #6a4ca8;
+  --tint-pink-bg: #fdecef;
+  --tint-pink-fg: #c0398c;
+  --tint-gray-bg: #eef1f6;
+  --tint-gray-fg: #6b7690;
+}
+
+/* ---- Modo oscuro ----
+   Se activa con data-theme="dark" en <html>. Solo redefinimos los valores;
+   los componentes siguen usando los mismos tokens, así que se adaptan solos.
+   --brand-navy NO se redefine: los rellenos de marca (logos, botones sólidos)
+   se quedan azul marino en ambos modos. --brand-primary sí se aclara porque
+   además hace de color de texto principal. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --brand-primary: #e8eefb;
+  --brand-primary-dark: #24406f;
+  --brand-accent: #5b93fb;
+  --brand-accent-light: #7aa6fb;
+  --brand-accent-lighter: #9fbcf9;
+  --brand-gray: #3a475f;
+
+  --page: #0d1524;
+  --surface: #16223c;
+  --border: #27334f;
+  --border-input: #34425f;
+  --divider: #1f2c47;
+
+  --text-secondary: #c1cce3;
+  --text-muted: #9aa7c4;
+  --text-muted-2: #8493b2;
+  --text-muted-3: #6d7c9e;
+
+  --success: #63d3a3;
+  --success-bg: rgba(31, 138, 91, 0.22);
+  --warning: #e0a94b;
+  --warning-bg: rgba(180, 116, 14, 0.22);
+  --danger: #f0857a;
+  --danger-bg: rgba(192, 57, 43, 0.22);
+  --teal: #5fc4c4;
+  --teal-bg: rgba(31, 122, 122, 0.22);
+
+  --vacation-bg: rgba(91, 147, 251, 0.16);
+  --vacation-text: #9fbcf9;
+  --earlyfriday-bg: rgba(255, 255, 255, 0.06);
+  --earlyfriday-text: #c1cce3;
+  --halfday-bg: rgba(31, 122, 122, 0.2);
+  --halfday-text: #5fc4c4;
+
+  --tint-purple-bg: rgba(138, 110, 190, 0.22);
+  --tint-purple-fg: #c7b3ec;
+  --tint-pink-bg: rgba(192, 57, 140, 0.22);
+  --tint-pink-fg: #f0a6cf;
+  --tint-gray-bg: rgba(255, 255, 255, 0.06);
+  --tint-gray-fg: #9aa7c4;
+}
+
+@theme inline {
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-dark: var(--brand-primary-dark);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-accent-light: var(--brand-accent-light);
+  --color-brand-accent-lighter: var(--brand-accent-lighter);
+  --color-brand-gray: var(--brand-gray);
+
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-border-input: var(--border-input);
+  --color-divider: var(--divider);
+
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-muted-2: var(--text-muted-2);
+  --color-text-muted-3: var(--text-muted-3);
+
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-teal: var(--teal);
+  --color-teal-bg: var(--teal-bg);
+
+  --color-vacation-bg: var(--vacation-bg);
+  --color-vacation-text: var(--vacation-text);
+  --color-earlyfriday-bg: var(--earlyfriday-bg);
+  --color-earlyfriday-text: var(--earlyfriday-text);
+  --color-halfday-bg: var(--halfday-bg);
+  --color-halfday-text: var(--halfday-text);
+  --color-tint-purple-bg: var(--tint-purple-bg);
+  --color-tint-purple-fg: var(--tint-purple-fg);
+  --color-tint-pink-bg: var(--tint-pink-bg);
+  --color-tint-pink-fg: var(--tint-pink-fg);
+  --color-tint-gray-bg: var(--tint-gray-bg);
+  --color-tint-gray-fg: var(--tint-gray-fg);
+
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-manrope);
+}
+
+body {
+  background: var(--page);
+  color: var(--brand-primary);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+}
