@@ -18,7 +18,13 @@ export function OrgChartBrowser({
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const departamentos = useMemo(() => getDepartamentos(people), [people]);
 
-  const initialFocusId = byId.has(currentUserId) ? currentUserId : (rootIds[0] ?? people[0]?.id ?? "");
+  // Si el usuario tiene equipo o jefe, se ubica en su nodo; de lo contrario, inicia en la cima (Gerente General).
+  const currentUserPerson = byId.get(currentUserId);
+  const currentUserHasTree =
+    currentUserPerson && (currentUserPerson.directReportCount > 0 || currentUserPerson.managerId);
+  const topCompanyLeaderId = rootIds[0] ?? people[0]?.id ?? "";
+  const initialFocusId = currentUserHasTree ? currentUserId : topCompanyLeaderId;
+
   const [focusId, setFocusId] = useState(initialFocusId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showRoots, setShowRoots] = useState(false);
@@ -38,8 +44,6 @@ export function OrgChartBrowser({
     [people, query, departamento, searching]
   );
 
-  // El panel de la derecha es bajo demanda: solo aparece cuando se hace clic
-  // en el ícono de "ver ficha" de una tarjeta, no por defecto.
   const selectedPerson = selectedId ? byId.get(selectedId) : undefined;
   const selectedManager =
     selectedPerson?.managerId ? (byId.get(selectedPerson.managerId) ?? null) : null;
@@ -53,13 +57,9 @@ export function OrgChartBrowser({
   }
 
   function goToTop() {
-    if (rootIds.length <= 1) {
-      if (rootIds[0]) focusOn(rootIds[0]);
-      return;
+    if (topCompanyLeaderId) {
+      focusOn(topCompanyLeaderId);
     }
-    setShowRoots(true);
-    setQuery("");
-    setDepartamento(null);
   }
 
   return (
@@ -95,10 +95,19 @@ export function OrgChartBrowser({
           <button
             type="button"
             onClick={goToTop}
-            className="rounded-[10px] border-[1.5px] border-border-input bg-surface px-3.5 py-2.5 text-xs font-bold text-text-secondary"
+            className="rounded-[10px] border-[1.5px] border-border-input bg-surface px-3.5 py-2.5 text-xs font-bold text-text-secondary transition hover:border-brand-accent hover:text-brand-accent"
           >
-            Ver desde arriba
+            🏛️ Ver desde la cima
           </button>
+          {byId.has(currentUserId) && (
+            <button
+              type="button"
+              onClick={() => focusOn(currentUserId)}
+              className="rounded-[10px] border-[1.5px] border-border-input bg-surface px-3.5 py-2.5 text-xs font-bold text-brand-primary transition hover:border-brand-accent hover:text-brand-accent"
+            >
+              🎯 Ver mi posición
+            </button>
+          )}
         </div>
 
         {searching ? (
@@ -126,9 +135,7 @@ export function OrgChartBrowser({
           <div className="rounded-[14px] border border-border bg-surface p-5">
             {rootIds.length > 1 && (
               <p className="mb-3 text-xs text-text-muted-3">
-                Estas {rootIds.length} personas no tienen jefe asignado en el Excel maestro — es probable
-                que falte capturar su &quot;Jefe Inmediato&quot;. Gente y Gestión puede corregirlo en el
-                próximo importe.
+                Estas {rootIds.length} personas están al frente de sus áreas o direcciones en la compañía.
               </p>
             )}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
@@ -167,7 +174,7 @@ export function OrgChartBrowser({
               <div className="mb-3 text-center text-xs font-semibold uppercase tracking-wide text-text-muted-2">
                 {directReports.length > 0
                   ? `Reportan directo a ${focusPerson?.name.split(" ")[0]} (${directReports.length})`
-                  : "Sin reportes directos"}
+                  : "Sin reportes directos en este nivel"}
               </div>
               {directReports.length > 0 && (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
