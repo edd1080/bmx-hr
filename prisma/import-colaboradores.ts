@@ -1,8 +1,8 @@
 /**
  * prisma/import-colaboradores.ts
  *
- * Importación en 2 fases:
- *  Fase 1 – crea/actualiza todos los User sin managerId.
+ * Importación en 2 fases con resolución de Puesto / Posición y Jerarquía:
+ *  Fase 1 – crea/actualiza todos los User incluyendo su puesto oficial.
  *  Fase 2 – resuelve jerarquías (JefeNombre → managerId).
  *
  * Uso:
@@ -13,6 +13,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import * as XLSX from "xlsx";
 import * as path from "path";
+import * as fs from "fs";
 import { prisma } from "../src/lib/prisma";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -24,7 +25,6 @@ function excelDateToDate(serial: number | string): Date | null {
     const parsed = new Date(serial);
     return isNaN(parsed.getTime()) ? null : parsed;
   }
-  // Excel fecha = días desde 1/1/1900 (con bug del año 1900 bisiesto)
   const utcDays = Math.floor(serial) - 25569;
   return new Date(utcDays * 86400 * 1000);
 }
@@ -34,12 +34,11 @@ function buildUsername(name: string): string {
   const parts = name
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // quita acentos
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z\s]/g, "")
     .trim()
     .split(/\s+/);
 
-  // Nombre + primer apellido
   if (parts.length >= 2) return `${parts[0]}.${parts[1]}`;
   return parts[0] || "usuario";
 }
@@ -56,31 +55,29 @@ function uniqueUsername(base: string, taken: Set<string>): string {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const filePath = path.resolve(
-    __dirname,
-    "../Plantilla_Importacion_Colaboradores_BIA.xlsx"
-  );
-  console.log("📂 Leyendo:", filePath);
+  const file2Path = path.resolve(__dirname, "../Plantilla_Importacion_Colaboradores_BIA 2.xlsx");
+  const file1Path = path.resolve(__dirname, "../Plantilla_Importacion_Colaboradores_BIA.xlsx");
+
+  const filePath = fs.existsSync(file2Path) ? file2Path : file1Path;
+  console.log("📂 Leyendo plantilla:", filePath);
 
   const wb = XLSX.readFile(filePath);
   const ws = wb.Sheets[wb.SheetNames[0]];
   const raw: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
   // Fila 0 = headers, filas 1+ = datos
-  const rows = raw.slice(1).filter((r) => r[0]); // filtra filas vacías
+  const rows = raw.slice(1).filter((r) => r[0]);
   console.log(`📋 Total de filas a procesar: ${rows.length}`);
 
   // ── Fase 1: crear / actualizar usuarios ──────────────────────────────────
-  console.log("\n🚀 FASE 1 — Creando colaboradores...");
+  console.log("\n🚀 FASE 1 — Actualizando colaboradores y puestos...");
 
   const DEFAULT_PASSWORD = "BIA2024!";
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
 
-  // Mapa nombre_normalizado → id, para la fase 2
   const nameToId = new Map<string, string>();
   const takenUsernames = new Set<string>();
 
-  // Pre-cargar usernames existentes
   const existing = await prisma.user.findMany({ select: { username: true } });
   existing.forEach((u) => takenUsernames.add(u.username));
 
@@ -101,6 +98,7 @@ async function main() {
       diasAsignados,
       fechaIngresoRaw,
       esRRHH,
+      puestoRaw,
     ] = row as [
       number | string,
       string,
@@ -113,6 +111,7 @@ async function main() {
       number | null,
       number | string | null,
       string | null,
+      string | null,
     ];
 
     if (!nombre) continue;
@@ -122,9 +121,9 @@ async function main() {
     const hireDate = excelDateToDate(fechaIngresoRaw as number | string);
     const email = correo ? String(correo).trim() : undefined;
     const normalizedName = String(nombre).trim().toUpperCase();
+    const puesto = puestoRaw ? String(puestoRaw).trim() : (departamento ? String(departamento).trim() : undefined);
 
     try {
-      // Buscar si ya existe por código o correo
       const existingUser = await prisma.user.findFirst({
         where: {
           OR: [
@@ -137,7 +136,6 @@ async function main() {
       let userId: string;
 
       if (existingUser) {
-        // Actualizar datos del colaborador existente
         const updated_ = await prisma.user.update({
           where: { id: existingUser.id },
           data: {
@@ -147,6 +145,7 @@ async function main() {
             curp: curp ? String(curp).trim() : undefined,
             area: area ? String(area).trim() : undefined,
             departamento: departamento ? String(departamento).trim() : undefined,
+            puesto: puesto ?? undefined,
             category: categoria ? String(categoria).trim().toUpperCase() : "ADMINISTRATIVO",
             vacationDaysAssigned: diasAsignados ? Number(diasAsignados) : 0,
             earlyFridayDays: 6,
@@ -159,7 +158,6 @@ async function main() {
         userId = updated_.id;
         updated++;
       } else {
-        // Crear usuario nuevo
         const usernameBase = buildUsername(String(nombre).trim());
         const username = uniqueUsername(usernameBase, takenUsernames);
 
@@ -175,7 +173,7 @@ async function main() {
             curp: curp ? String(curp).trim() : undefined,
             area: area ? String(area).trim() : undefined,
             departamento: departamento ? String(departamento).trim() : undefined,
-            puesto: departamento ? String(departamento).trim() : undefined,
+            puesto: puesto ?? undefined,
             category: categoria ? String(categoria).trim().toUpperCase() : "ADMINISTRATIVO",
             vacationDaysAssigned: diasAsignados ? Number(diasAsignados) : 0,
             earlyFridayDays: 6,
@@ -201,7 +199,6 @@ async function main() {
   // ── Fase 2: asignar managerId ─────────────────────────────────────────────
   console.log("\n🔗 FASE 2 — Asignando jerarquía (managerId)...");
 
-  // Recargar todos los usuarios para tener nombre → id actualizado
   const allUsers = await prisma.user.findMany({
     select: { id: true, name: true, employeeCode: true },
   });
@@ -236,7 +233,6 @@ async function main() {
       continue;
     }
 
-    // No asignar a sí mismo como jefe
     if (userId === managerId) continue;
 
     await prisma.user.update({
@@ -246,8 +242,8 @@ async function main() {
     assigned++;
   }
 
-  console.log(`  ✅ Jerarquías asignadas: ${assigned} | Sin resolver (jefe externo): ${unresolved}`);
-  console.log("\n🎉 Importación completada.");
+  console.log(`  ✅ Jerarquías asignadas: ${assigned} | Sin resolver: ${unresolved}`);
+  console.log("\n🎉 Proceso de importación y actualización de puestos completado.");
 }
 
 main()
