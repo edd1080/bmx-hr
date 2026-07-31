@@ -1,6 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: any;
+};
+
 /**
  * Crea y retorna el cliente de Supabase optimizado para el Servidor (Server Components, Server Actions y API Routes).
  * Maneja las cookies HTTP-only de sesión de forma transparente.
@@ -16,13 +22,13 @@ export async function createClient() {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: CookieToSet[]) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options)
           );
         } catch {
-          // El metodo setAll fue llamado desde un Server Component.
+          // El método setAll fue llamado desde un Server Component.
           // Esto puede ignorarse si tienes un middleware renovando las cookies.
         }
       },
