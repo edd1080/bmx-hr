@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { signIn } from "next-auth/react";
 
 function LoginForm() {
   const router = useRouter();
@@ -21,30 +21,16 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const supabase = createClient();
-      // Permite inicio de sesion con email o nombre de usuario
-      const email = username.includes("@")
-        ? username.trim().toLowerCase()
-        : `${username.trim().toLowerCase()}@vacaciones.internal`;
-
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+      const res = await signIn("credentials", {
+        username: username.trim(),
         password,
+        redirect: false,
       });
 
-      if (authError) {
-        // Fallback a API local si Supabase Auth no ha recibido credenciales aun
-        const res = await fetch("/api/auth/login-legacy", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
-        });
-
-        if (!res.ok) {
-          setError("Usuario o contraseña incorrectos.");
-          setLoading(false);
-          return;
-        }
+      if (res?.error) {
+        setError("Usuario o contraseña incorrectos.");
+        setLoading(false);
+        return;
       }
 
       router.push(callbackUrl);

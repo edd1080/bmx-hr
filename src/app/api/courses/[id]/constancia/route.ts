@@ -27,9 +27,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { searchParams } = new URL(request.url);
   const tipo = searchParams.get("tipo") === "dc3" ? "dc3" : "diploma";
   const requestedUserId = searchParams.get("userId");
+  let targetUserId = session.user.id;
 
-  // Por defecto la constancia es del propio usuario; G&G puede generar la de cualquiera.
-  const targetUserId = requestedUserId && session.user.isHR ? requestedUserId : session.user.id;
+  if (requestedUserId && requestedUserId !== session.user.id) {
+    const isHR = session.user.isHR;
+    const isManagerOfTarget = await prisma.user.count({
+      where: { id: requestedUserId, managerId: session.user.id },
+    });
+
+    if (isHR || isManagerOfTarget > 0) {
+      targetUserId = requestedUserId;
+    } else {
+      return new Response("No tienes autorización para acceder a esta constancia.", { status: 403 });
+    }
+  }
 
   const [course, user, enrollment] = await Promise.all([
     prisma.course.findUnique({ where: { id: courseId } }),

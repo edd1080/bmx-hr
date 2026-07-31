@@ -31,8 +31,12 @@ export default async function AppLayout({
   });
   // Si el colaborador fue dado de baja mientras tenía sesión abierta, se le bloquea.
   if (!me || !me.activo) redirect("/login");
-  await ensureBirthdayNotification(userId, me.birthDate, me.name);
-  await ensureCapacitacionReminders(userId);
+
+  // Notificaciones perezosas en segundo plano (sin bloquear el render del layout)
+  Promise.all([
+    ensureBirthdayNotification(userId, me.birthDate, me.name),
+    ensureCapacitacionReminders(userId),
+  ]).catch(() => {});
 
   // Conteos para las insignias del panel (solo lo que aplica al rol).
   const [pendingApprovals, pendingMetaReviews, pendingToRegister, pendingFirmas] = await Promise.all([
@@ -54,7 +58,6 @@ export default async function AppLayout({
       label: "Servicios",
       items: [
         { label: "Vacaciones y permisos", href: "/perfil", icon: "vacaciones" },
-        { label: "Venta empleado", href: "/venta-empleados", icon: "venta" },
         { label: "Beneficios", href: "/beneficios", icon: "beneficios" },
         { label: "Mesa de ayuda", href: "/mesa-ayuda", icon: "mesa" },
         { label: "Firma electrónica", href: "/firma", icon: "firma", badge: pendingFirmas },

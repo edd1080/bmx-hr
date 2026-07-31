@@ -102,20 +102,36 @@ async function computeOverlapAlerts(
   return alerts;
 }
 
-/** Assigns a stable "MG-{año}-####" folio the first time a constancia is generated. */
+/** Assigns a stable "MG-{año}-####" folio the first time a constancia is generated (concurrency-safe with retry). */
 export async function ensureFolio(requestId: string): Promise<string> {
   const request = await prisma.leaveRequest.findUniqueOrThrow({ where: { id: requestId } });
   if (request.folio) return request.folio;
 
   const year = new Date().getUTCFullYear();
-  const countThisYear = await prisma.leaveRequest.count({
-    where: { folio: { startsWith: `MG-${year}-` } },
-  });
-  const folio = `MG-${year}-${String(countThisYear + 1).padStart(4, "0")}`;
+  let attempt = 0;
+  while (attempt < 5) {
+    attempt++;
+    const countThisYear = await prisma.leaveRequest.count({
+      where: { folio: { startsWith: `MG-${year}-` } },
+    });
+    const folioCandidate = `MG-${year}-${String(countThisYear + attempt).padStart(4, "0")}`;
 
+    try {
+      const updated = await prisma.leaveRequest.update({
+        where: { id: requestId },
+        data: { folio: folioCandidate, pdfGeneratedAt: new Date() },
+      });
+      return updated.folio!;
+    } catch {
+      const current = await prisma.leaveRequest.findUnique({ where: { id: requestId } });
+      if (current?.folio) return current.folio;
+    }
+  }
+
+  const fallbackFolio = `MG-${year}-${requestId.slice(-6).toUpperCase()}`;
   await prisma.leaveRequest.update({
     where: { id: requestId },
-    data: { folio, pdfGeneratedAt: new Date() },
+    data: { folio: fallbackFolio, pdfGeneratedAt: new Date() },
   });
-  return folio;
+  return fallbackFolio;
 }

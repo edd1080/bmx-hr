@@ -70,7 +70,35 @@ export function isSingleDayLeaveType(type: string): boolean {
  * of drifting a day under non-UTC server timezones.
  */
 
-/** Counts weekdays (Mon-Fri) between two dates, inclusive. */
+/**
+ * Verifica si una fecha corresponde a un día festivo oficial obligatorio
+ * conforme al Artículo 74 de la Ley Federal del Trabajo (México).
+ */
+export function isMexicanOfficialHoliday(date: Date): boolean {
+  const month = date.getUTCMonth(); // 0 = Enero, 11 = Diciembre
+  const day = date.getUTCDate();
+  const dayOfWeek = date.getUTCDay(); // 0 = Domingo, 1 = Lunes...
+
+  // 1. Festivos con fecha fija:
+  if (month === 0 && day === 1) return true; // 1 de Enero (Año Nuevo)
+  if (month === 4 && day === 1) return true; // 1 de Mayo (Día del Trabajo)
+  if (month === 8 && day === 16) return true; // 16 de Septiembre (Día de la Independencia)
+  if (month === 11 && day === 25) return true; // 25 de Diciembre (Navidad)
+
+  // 2. Festivos flotantes (se conmemoran el lunes):
+  // Primer lunes de febrero (Aniversario de la Constitución)
+  if (month === 1 && dayOfWeek === 1 && day <= 7) return true;
+
+  // Tercer lunes de marzo (Natalicio de Benito Juárez)
+  if (month === 2 && dayOfWeek === 1 && day >= 15 && day <= 21) return true;
+
+  // Tercer lunes de noviembre (Aniversario de la Revolución Mexicana)
+  if (month === 10 && dayOfWeek === 1 && day >= 15 && day <= 21) return true;
+
+  return false;
+}
+
+/** Counts business days (Mon-Fri, excluding Mexican official holidays) between two dates, inclusive. */
 export function countBusinessDays(start: Date, end: Date): number {
   let count = 0;
   const cursor = new Date(start);
@@ -80,7 +108,9 @@ export function countBusinessDays(start: Date, end: Date): number {
 
   while (cursor <= last) {
     const day = cursor.getUTCDay();
-    if (day !== 0 && day !== 6) count++;
+    if (day !== 0 && day !== 6 && !isMexicanOfficialHoliday(cursor)) {
+      count++;
+    }
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return count;

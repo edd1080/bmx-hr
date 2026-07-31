@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 export type AuthContext = {
-  supabaseUser: { id: string; email?: string };
+  sessionUser: { id: string; username: string; isHR: boolean; mustChangePassword: boolean };
   user: {
     id: string;
     employeeCode: string | null;
@@ -18,25 +18,16 @@ export type AuthContext = {
 };
 
 /**
- * Obtiene el contexto del usuario autenticado en la sesion actual.
- * Retorna null si no hay una sesion valida.
+ * Obtiene el contexto del usuario autenticado en la sesión actual mediante NextAuth.
+ * Retorna null si no hay una sesión válida o activa.
  */
 export async function getAuthContext(): Promise<AuthContext | null> {
-  const supabase = await createClient();
-  const {
-    data: { user: supabaseUser },
-    error,
-  } = await supabase.auth.getUser();
+  const session = await auth();
+  if (!session?.user?.id) return null;
 
-  if (error || !supabaseUser) return null;
-
-  // Busca el perfil correspondiente en la tabla public.User por email o username
   const user = await prisma.user.findFirst({
     where: {
-      OR: [
-        { id: supabaseUser.id },
-        { email: supabaseUser.email },
-      ],
+      id: session.user.id,
       activo: true,
     },
     select: {
@@ -54,11 +45,19 @@ export async function getAuthContext(): Promise<AuthContext | null> {
 
   if (!user) return null;
 
-  return { supabaseUser, user };
+  return {
+    sessionUser: {
+      id: session.user.id,
+      username: session.user.username ?? user.username,
+      isHR: session.user.isHR ?? user.isHR,
+      mustChangePassword: session.user.mustChangePassword ?? user.mustChangePassword,
+    },
+    user,
+  };
 }
 
 /**
- * Exige que el usuario este autenticado. Si no lo esta, retorna una respuesta 401.
+ * Exige que el usuario esté autenticado. Si no lo está, retorna una respuesta 401.
  */
 export async function requireAuth(): Promise<
   { ok: true; context: AuthContext } | { ok: false; response: NextResponse }
@@ -74,7 +73,7 @@ export async function requireAuth(): Promise<
 }
 
 /**
- * Exige que el usuario pertenezca al rol Gente & Gestion / Administrador (isHR === true).
+ * Exige que el usuario pertenezca al rol Gente & Gestión / Administrador (isHR === true).
  */
 export async function requireHR(): Promise<
   { ok: true; context: AuthContext } | { ok: false; response: NextResponse }
@@ -96,7 +95,7 @@ export async function requireHR(): Promise<
 }
 
 /**
- * Exige que el usuario sea Gente & Gestion (HR) o el Jefe Directo (Manager) del objetivo.
+ * Exige que el usuario sea Gente & Gestión (HR), el propio usuario objetivo o su Jefe Directo (Manager).
  */
 export async function requireManagerOrHR(targetUserId: string): Promise<
   { ok: true; context: AuthContext } | { ok: false; response: NextResponse }
@@ -110,7 +109,6 @@ export async function requireManagerOrHR(targetUserId: string): Promise<
     return authResult;
   }
 
-  // Verifica si el usuario actual es el jefe directo del targetUserId
   const targetUser = await prisma.user.findUnique({
     where: { id: targetUserId },
     select: { managerId: true },
