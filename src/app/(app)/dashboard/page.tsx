@@ -64,13 +64,13 @@ export default async function DashboardPage() {
             <div className="text-3xl">🎉🎂🥳</div>
             <h2 className="font-display mt-2 text-2xl font-bold">¡Feliz cumpleaños, {firstName}!</h2>
             <p className="mt-1 text-[15px] text-[#DCE7FB]">
-              Todo el equipo de Café Punta del Cielo te desea un día increíble.
+              Todo el equipo te desea un día increíble. 🎊
             </p>
           </div>
         ) : (
           <div className="mb-5">
             <h1 className="font-display text-[22px] font-bold text-brand-primary">Hola, {firstName}</h1>
-            <p className="text-sm text-text-muted">Esto es lo que pasa en Café Punta del Cielo hoy.</p>
+            <p className="text-sm text-text-muted">Esto es lo que sucede en tu operación el día de hoy.</p>
             {birthdayMonth && (
               <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-vacation-bg px-3 py-1 text-[12.5px] font-semibold text-vacation-text">
                 🎂 Este mes es tu cumpleaños — ¡felicidades por adelantado!

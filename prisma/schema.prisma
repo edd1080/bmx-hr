@@ -33,6 +33,8 @@ model User {
   telefono             String?
   category             String   @default("ADMINISTRATIVO")
   vacationDaysAssigned Int      @default(0)
+  earlyFridayDays      Int      @default(6)
+  halfDayDays          Int      @default(6)
   hireDate             DateTime?
   birthDate            DateTime?
   empresa              String?

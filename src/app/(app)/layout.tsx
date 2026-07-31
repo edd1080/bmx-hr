@@ -61,6 +61,7 @@ export default async function AppLayout({
       label: "Servicios",
       items: [
         { label: "Vacaciones y permisos", href: "/perfil", icon: "vacaciones" },
+        { label: "Mis metas", href: "/metas", icon: "metas" },
         { label: "Beneficios", href: "/beneficios", icon: "beneficios" },
         { label: "Mesa de ayuda", href: "/mesa-ayuda", icon: "mesa" },
         { label: "Firma electrónica", href: "/firma", icon: "firma", badge: pendingFirmas },

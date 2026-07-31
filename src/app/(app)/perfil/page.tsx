@@ -64,6 +64,12 @@ export default async function PerfilPage() {
   const nextVacation = upcoming.find((r) => r.type === "VACATION");
   const dispPct = balance.assigned > 0 ? Math.round((balance.available / balance.assigned) * 100) : 0;
 
+  // Saldos de Early Friday y Medio Día Libre
+  const earlyFridayUsed = requests.filter((r) => r.type === "EARLY_FRIDAY" && r.status !== "REJECTED").length;
+  const halfDayUsed = requests.filter((r) => r.type === "HALF_DAY" && r.status !== "REJECTED").length;
+  const earlyFridayAvailable = Math.max(0, (user.earlyFridayDays ?? 6) - earlyFridayUsed);
+  const halfDayAvailable = Math.max(0, (user.halfDayDays ?? 6) - halfDayUsed);
+
   const kpis = [
     {
       label: "Días disponibles",
@@ -96,6 +102,25 @@ export default async function PerfilPage() {
       icon: "✈",
       bg: "bg-tint-purple-bg",
       col: "text-tint-purple-fg",
+    },
+  ];
+
+  const beneficioKpis = [
+    ...(user.category === "ADMINISTRATIVO" ? [{
+      label: "Early Friday disponibles",
+      value: String(earlyFridayAvailable),
+      sub: `${earlyFridayUsed} usados de ${user.earlyFridayDays ?? 6}`,
+      icon: "☀️",
+      bg: "bg-earlyfriday-bg",
+      col: "text-earlyfriday-text",
+    }] : []),
+    {
+      label: "Medios días disponibles",
+      value: String(halfDayAvailable),
+      sub: `${halfDayUsed} usados de ${user.halfDayDays ?? 6}`,
+      icon: "🌑",
+      bg: "bg-halfday-bg",
+      col: "text-halfday-text",
     },
   ];
 
@@ -165,6 +190,26 @@ export default async function PerfilPage() {
 
       <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4">
         {kpis.map((k) => (
+          <div key={k.label} className="rounded-[14px] border border-border bg-surface p-5 shadow-sm">
+            <div className="mb-3.5 flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-text-muted-2">{k.label}</span>
+              <span
+                className={`font-display flex h-[34px] w-[34px] items-center justify-center rounded-[9px] text-base font-extrabold ${k.bg} ${k.col}`}
+              >
+                {k.icon}
+              </span>
+            </div>
+            <div className="font-display text-[26px] font-extrabold leading-none text-brand-primary">
+              {k.value}
+            </div>
+            <div className="mt-1.5 text-xs text-text-muted-3">{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Saldos Early Friday y Medio Día */}
+      <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4">
+        {beneficioKpis.map((k) => (
           <div key={k.label} className="rounded-[14px] border border-border bg-surface p-5 shadow-sm">
             <div className="mb-3.5 flex items-center justify-between">
               <span className="text-[13px] font-semibold text-text-muted-2">{k.label}</span>

@@ -15,7 +15,7 @@ export type NavGroup = { label: string | null; items: NavItem[] };
 type IconKey =
   | "inicio" | "vacaciones" | "venta" | "beneficios" | "mesa" | "firma" | "organigrama"
   | "equipo" | "metasEquipo" | "colaboradores" | "solicitudes" | "panel" | "importar"
-  | "constancias" | "metasCompania" | "onboarding";
+  | "constancias" | "metasCompania" | "onboarding" | "metas";
 
 // Registro de íconos (SVG en línea, heredan color del contorno).
 const ICONS: Record<IconKey, React.ReactNode> = {
@@ -35,6 +35,7 @@ const ICONS: Record<IconKey, React.ReactNode> = {
   constancias: <><path d="M14 2H6v20h12V8z" /><path d="M14 2v6h6" /></>,
   metasCompania: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.2" /><circle cx="12" cy="12" r="0.6" fill="currentColor" /></>,
   onboarding: <><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="12" r="3" /><path d="M9 6h4a2 2 0 0 1 2 2v1M9 18h4a2 2 0 0 0 2-2v-1" /></>,
+  metas: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.2" /><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" /></>,
 };
 
 function Icon({ name }: { name: IconKey }) {
